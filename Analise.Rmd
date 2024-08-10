@@ -1,0 +1,181 @@
+---
+title: "Análise Exploratória - Comparação entre vendedores de diferentes lojas"
+author: "Daniel"
+date: "2024-08-08"
+output:
+  html_document:
+    df_print: paged
+  word_document: default
+  pdf_document:
+    latex_engine: xelatex
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(ggplot2)
+library(plotly)
+library(corrplot)
+library(FactoMineR)
+library(factoextra)
+library(fastDummies)
+```
+
+# 
+
+# Análise Exploratória - Dataset de Vendedores
+
+## Base de dados Employee
+
+### Carregar dataset
+
+```{r}
+employee_dataset <- read.csv(file = 'employee_final.csv')
+head(employee_dataset)
+```
+
+### Análise exploratória
+
+```{r}
+summary(employee_dataset)
+```
+
+```{r}
+str(employee_dataset)
+```
+
+```{r}
+sapply(employee_dataset, function(x) sum(is.na(x)))
+```
+
+```{r}
+employee_dataset$initial_date <- as.Date(employee_dataset$initial_date, format = "%d/%m/%Y")
+
+employee_dataset$end_date <- as.Date(employee_dataset$end_date, format = "%d/%m/%Y")
+```
+
+```{r}
+
+employee_dataset$store_id <- as.numeric(gsub("^[A-Za-z_ /]+", "", employee_dataset$store_id))
+
+
+employee_dataset$store_id
+
+```
+
+### Analise Univariada
+
+```{r}
+status_freq <- table(employee_dataset$status)
+role_freq <- table(employee_dataset$role)
+store_id_freq <- table(employee_dataset$store_id)
+
+
+ggplot(employee_dataset, aes(x = role)) +
+  geom_bar() +
+  ggtitle("Coluna de Role")
+
+ggplot(employee_dataset, aes(x = store_id)) +
+  geom_bar() +
+  ggtitle("Coluna de Store ID")
+```
+
+### Analise Bivariada
+
+#### Distribuição por status
+
+Primeiramente para fazer essa análise, iremos transformar a coluna de status de formato ch para binário, com a finalidade de aperfeiçoar a análise e visualização.
+
+```{r}
+employee_dataset$status <- ifelse(employee_dataset$status == "ativo", 1, 0)
+```
+
+```{r}
+
+ggplot(employee_dataset, aes(x = status)) +
+  geom_bar(fill = "steelblue") +
+  labs(title = "Colaboradores por status", x = "Status", y = "Contagem")
+```
+
+#### Outliers
+
+```{r}
+
+
+employee_dataset$duration_years <- with(employee_dataset, 
+  as.numeric(difftime(
+    ifelse(is.na(end_date), Sys.Date(), end_date),
+    initial_date,
+    units = "days"
+  )) / 365
+)
+
+
+boxplot(employee_dataset$duration_years, main = "Tempo do Emprego", ylab = "Tempo (anos)", col = "lightblue", border = "blue")
+
+```
+
+```{r}
+ggplot(employee_dataset, aes(x = duration_years)) +
+  geom_histogram(aes(y = ..density..), bins = 30, fill = "lightblue", color = "black") +
+  geom_density(color = "red", linewidth = 1) +
+  labs(title = "Histograma com Curva de Densidade", x = "Tempo do Emprego (anos)", y = "Densidade") +
+  theme_minimal()
+```
+
+```{r}
+
+ggplot(employee_dataset, aes(x = store_id, y = duration_years)) +
+  geom_point(color = "blue") +
+  labs(title = "Relacao entre loja e tempo de emprego", x = "ID da Loja", y = "Tempo do emprego (anos)") +
+  theme_minimal()
+```
+
+```{r}
+employee_cor <- employee_dataset[, c("status", "duration_years", "store_id")]
+cor_matrix <- cor(employee_cor, use = "complete.obs")
+corrplot(cor_matrix, method = "color", type = "upper", order = "hclust", addCoef.col = "black")
+```
+
+### PCA
+
+```{r}
+
+
+min_date <- min(employee_dataset$initial_date, na.rm = TRUE)
+employee_dataset <- employee_dataset %>%
+  mutate(
+    initial_days = as.numeric(difftime(initial_date, min_date, units = "days")),
+    end_days = as.numeric(difftime(end_date, min_date, units = "days"))
+  )
+
+
+pca_data <- cbind(
+  employee_dataset %>% select(initial_days, end_days,
+  status,store_id)
+)
+
+pca_result <- PCA(pca_data, graph = FALSE)
+
+fviz_pca_var(pca_result)  
+fviz_pca_biplot(pca_result)  
+```
+
+### 
+
+## Conclusão
+
+### Descobertas
+
+Para realizar a atividade, foi feita uma análise da base de dados employee_final.csv. Nas primeiras células é feita uma análise para reconhecimento da tabela, utilizando funções como str e summary, com elas descobrimos que a nossa base possui em sua maioria colunas de tipo chr, com exceção da coluna id_employee que é do tipo int.
+
+Ao observar a tabela, vi que as colunas de datas, estavam em formato chr, então transformei ela em formato de date para melhorar as visualizações da análise.
+
+Realizando a análise univariada, podemos ver a quantidade de dados nas colunas de role e store_id, podemos observar uma proporção de 1 gerente para 3 vendedores em cada loja e a distrubuição de funcionários por loja.
+
+Na análise bivariada foi feita visualização de outliers, e relações entre a loja e o tempo de emprego dos funcionários.
+
+### Discussões
+
+Como a tabela analisada possui em sua maioria, dados qualitativos, foi bem difícil gerar análises de matriz de correlação e PCA, os que foram feitos não extraem muito valor para a análise, visto que foram feitos através de recategorização de dados como chr e date para numérico.
+
+Contudo, através dessa análise podemos entender melhor o conjunto de dados que temos disponível e planejar como iremos associar essa tabela com as outras disponíveis, como por exemplo, a tabela de store_final e target_salesperson_final.
